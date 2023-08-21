@@ -1,0 +1,236 @@
+
+;myportin_A DSIN 1
+;myportout_Y DSOUT 2
+;myportin_MULA DSIN 3
+;myportin_DIVA  DSIN 4
+;myportin_RESET  DSIN 5
+;myportin_ENTER DSIN 6
+
+CONSTANT	portA,		01
+CONSTANT	portY,		02
+CONSTANT	portMULA,	03
+CONSTANT	portDIVA, 	04
+CONSTANT	portRESET,	05
+CONSTANT	portENTER,	06		
+CONSTANT	theDelay, 	02		
+
+
+NAMEREG		s0,countreg0
+NAMEREG		s1,countreg1
+NAMEREG		s2,countreg2
+NAMEREG		s3,counter
+NAMEREG		s4,WhatAction
+NAMEREG		s5,Action
+NAMEREG		s6,compare_reg
+NAMEREG		s7,temp
+NAMEREG		s8,tempA
+NAMEREG		s9,AAbsuluteValue
+NAMEREG		sA,signA
+NAMEREG		sB,signY
+NAMEREG		sC,tempY
+
+
+			CALL 	Reset
+Start:		CALL	Debounce
+			CALL	NavigateAction
+			CALL 	result
+			JUMP	Start
+
+result:		OUTPUT 	tempY, portY
+			RETURN
+
+inputA:
+		INPUT	tempA, portA
+		RETURN
+		
+ADDRESS 010
+
+init0:  	LOAD  	countreg0, theDelay
+			RETURN
+
+init1:  	LOAD  	countreg1, theDelay
+			RETURN
+
+init2:  	LOAD  	countreg2, theDelay
+			RETURN
+
+init3:  	LOAD	counter, 14
+			RETURN
+
+ADDRESS 020
+
+Debounce:	
+				CALL	init3
+	loop3:		CALL	WhatBottom
+				STORE	Action,	(counter)			
+				CALL	delay						
+				SUB		counter, 01
+				JUMP	NZ, loop3				
+				CALL	init3						
+	loop4:		FETCH	compare_reg, (counter)		
+				COMPARE	compare_reg, Action			 
+				JUMP	NZ, Debounce					
+				SUB		counter, 01
+				JUMP	NZ, loop4					
+				RETURN	
+				
+ADDRESS 030			
+			
+delay:		CALL 	init0
+	loop0:  CALL 	delay1 
+			SUB 	countreg0,01
+			JUMP 	NZ,loop0
+			RETURN
+
+	delay1: CALL 	init1                            
+	loop1:  CALL 	delay2
+			SUB 	countreg1, 01                             
+			JUMP 	NZ, loop1
+			RETURN
+
+	delay2: CALL 	init2                            
+	loop2:  SUB 	countreg2, 01                             
+			JUMP 	NZ, loop2
+			RETURN
+	
+ADDRESS 040
+
+WhatBottom:
+			INPUT	 WhatAction,portRESET
+			TEST	 WhatAction, 01
+			JUMP	 NZ, LoadAction
+			
+			INPUT	 WhatAction,portMULA
+			TEST	 WhatAction, 01
+			JUMP	 NZ, LoadAction
+			
+			INPUT	 WhatAction,portDIVA
+			TEST	 WhatAction, 01
+			JUMP	 NZ, LoadAction
+			
+			INPUT	 WhatAction,portENTER
+			TEST	 WhatAction, 01
+			JUMP	 NZ, LoadAction
+			
+			TEST	 WhatAction, 01
+			JUMP	 Z, WhatBottom
+
+LoadAction:
+			LOAD Action,WhatAction
+			RETURN			
+
+NavigateAction:
+				COMPARE Action,portENTER
+				JUMP	Z, enter
+				COMPARE Action,portRESET
+				JUMP	Z, Reset
+				COMPARE	Action,portMULA
+				JUMP	Z, mulA
+				COMPARE Action, portDIVA
+				JUMP	Z, div4
+
+Reset:
+		LOAD	tempY,01
+		LOAD	signY,00
+		CALL	result
+		RETURN
+	
+enter:
+		CALL	inputA
+		LOAD	temp, 08
+		AND		temp, tempA
+		COMPARE	temp, 08
+		JUMP	Z, Negative
+		LOAD	signA, 00
+		AND		AAbsuluteValue,tempA
+		CALL	Debounce
+		RETURN
+		
+Negative:
+			LOAD signA, 01
+			LOAD AAbsuluteValue, 07
+			AND	AAbsuluteValue,tempA
+			CALL Debounce
+			RETURN
+				
+mulA:	
+		COMPARE	AAbsuluteValue, 00
+		JUMP	Z, out_zero
+		COMPARE tempY, 00
+		JUMP	Z, out_zero
+		COMPARE AAbsuluteValue, 02
+		JUMP	Z, mul2
+		COMPARE AAbsuluteValue, 04
+		JUMP	Z, mul4
+		RETURN
+
+		mul2:	
+				COMPARE	tempY, 3F
+				JUMP 	C, OutMaxValue
+				SL0		tempY
+				RETURN
+				
+		mul4:
+				COMPARE tempY, 1F
+				JUMP	C, OutMaxValue
+				SL0		tempY
+				SL0		tempY
+				RETURN
+				
+divA:	
+	COMPARE	AAbsuluteValue, 00
+	JUMP	Z, OutMaxValue
+	COMPARE	tempY, AAbsuluteValue
+	JUMP	Z, out_one
+	JUMP	C, out_zero
+	COMPARE AAbsuluteValue, 02
+	JUMP	Z, div2
+	COMPARE AAbsuluteValue, 04
+	JUMP	Z, div4
+	
+	div2:
+			SR0 tempY
+			RETURN
+	div4:
+			SR0 tempY
+			SR0 tempY
+			RETURN
+	
+
+ADDRESS 400
+			
+								
+out_zero:		LOAD	tempY,	00
+				LOAD	signY,	00
+				JUMP	add_sign
+				
+out_one:		LOAD	tempY, 01
+				LOAD	signY, 00
+				JUMP	add_sign
+
+OutMaxValue:	LOAD 	tempY,7F
+				JUMP	result
+				
+; out_neg_max_value:	LOAD 	tempY,FF
+					; JUMP	result
+
+add_sign:		ADD		tempY,signY
+				JUMP	result
+
+
+
+	
+	
+; separate_sign:	 												
+				; LOAD	signA,tempA
+				; AND		signA,08
+				; AND		tempA,07
+				; LOAD	signY,tempY
+				; AND		signY,80
+				; AND		tempY,7f
+				; SL0		signA							  
+				; SL0		signA							  
+				; SL0		signA							  
+				; SL0		signA
+				; XOR		signY,signA
+				; RETURN
